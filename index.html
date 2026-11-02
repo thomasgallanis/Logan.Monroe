@@ -121,7 +121,7 @@
             background: var(--c-ink);
             color: var(--c-ink-text);
             position: fixed; inset: 0 auto 0 0; z-index: 1030;
-            transition: transform var(--transition-speed) var(--ease);
+            transition: transform var(--transition-speed) var(--ease), filter .45s var(--ease);
             display: flex; flex-direction: column;
             border-right: 1px solid rgba(255,255,255,.04);
         }
@@ -174,7 +174,13 @@
 
         #main-content {
             margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column;
-            min-width: 0; transition: margin-left var(--transition-speed) var(--ease);
+            min-width: 0; transition: margin-left var(--transition-speed) var(--ease), filter .45s var(--ease);
+        }
+        /* Dialer blur — applied to sidebar & main content individually so the fixed sidebar keeps its position */
+        #sidebar.dialer-blur,
+        #main-content.dialer-blur {
+            filter: blur(6px) saturate(.9) brightness(.96);
+            pointer-events: none;
         }
         @media (max-width: 991.98px) {
             #sidebar { transform: translateX(-100%); box-shadow: none; }
@@ -573,7 +579,7 @@
         </select>
     </div>
     <div class="login-card">
-        <div class="text-center mb-4"><div class="login-mark"><i class="bi bi-briefcase-fill"></i></div><h4 class="fw-bold mt-2 mb-0">ApexCRM</h4><small class="text-muted" data-i18n="login.sub">Please sign in to continue</small></div>
+        <div class="text-center mb-4"><div class="login-mark"><i class="bi bi-briefcase-fill"></i></div><h4 class="fw-bold mt-2 mb-0">Thomas CRM</h4><small class="text-muted" data-i18n="login.sub">Please sign in to continue</small></div>
         <form id="loginForm" onsubmit="handleLogin(event)">
             <div class="mb-3"><label class="form-label small fw-bold" data-i18n="login.user">Username</label><input type="text" id="login-user" class="form-control" autocomplete="username" required></div>
             <div class="mb-3"><label class="form-label small fw-bold" data-i18n="login.pass">Password</label><input type="password" id="login-pass" class="form-control" autocomplete="current-password" required></div>
@@ -585,7 +591,7 @@
 
 <div id="app-wrapper" style="display:none;">
     <aside id="sidebar">
-        <div class="sidebar-brand"><i class="bi bi-briefcase-fill me-2"></i><span>ThomasCRM</span></div>
+        <div class="sidebar-brand"><i class="bi bi-briefcase-fill me-2"></i><span>Thomas CRM</span></div>
         <div class="p-2 flex-grow-1 overflow-y-auto">
             <small class="text-uppercase text-muted fw-bold px-3 d-block my-2" style="font-size:0.7rem;" data-i18n="nav.main">Main Menu</small>
             <a href="#" class="nav-link-custom active" onclick="switchTab('dashboard',event)"><i class="bi bi-speedometer2"></i> <span data-i18n="nav.dashboard">Dashboard</span></a>
@@ -957,15 +963,14 @@ window.refreshDashboard=function(){refreshDash();};
 /* =========================================================
    TOASTS — short-lived, auto-dismiss, 0.4 s fade-out
    ========================================================= */
-const TOAST_VISIBLE_MS = 2000;   // how long the toast stays fully visible
-const TOAST_FADE_MS    = 400;    // fade-out time  ( <- the 0.4 s )
-const TOAST_MAX        = 3;      // max toasts on screen at the same time
+const TOAST_VISIBLE_MS = 2000;
+const TOAST_FADE_MS    = 400;
+const TOAST_MAX        = 3;
 
 function toast(msg,type='success'){
   const c=document.getElementById('toastContainer');
   if(!c)return;
 
-  /* same message already visible? -> just restart its timer (no stacking) */
   const same=Array.from(c.querySelectorAll('.toast')).find(el=>el.dataset.msg===msg);
   if(same){
     clearTimeout(Number(same.dataset.timer));
@@ -973,7 +978,6 @@ function toast(msg,type='success'){
     return;
   }
 
-  /* limit the number of simultaneous toasts -> drop the oldest */
   const alive=Array.from(c.querySelectorAll('.toast'));
   if(alive.length>=TOAST_MAX)alive.slice(0,alive.length-TOAST_MAX+1).forEach(el=>el.remove());
 
@@ -997,6 +1001,19 @@ function dismissToast(el){
   setTimeout(()=>el.remove(),TOAST_FADE_MS);
 }
 /* ================= END TOASTS ================= */
+
+/* ================= DIALER BLUR (stylish) =================
+   Applied to #sidebar and #main-content individually so the
+   fixed sidebar keeps its position and never scrolls away.
+   ========================================================= */
+function setDialerBlur(on){
+  const s=document.getElementById('sidebar');
+  const m=document.getElementById('main-content');
+  if(s)s.classList.toggle('dialer-blur',!!on);
+  if(m)m.classList.toggle('dialer-blur',!!on);
+}
+window.setDialerBlur=setDialerBlur;
+/* ================= END DIALER BLUR ================= */
 
 function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):'';}
 function statusClass(s){const map={'New':'status-badge-new','Voice Mail':'status-badge-voicemail','No Answer':'status-badge-no-answer','Hung Up':'status-badge-hungup','Not Interested':'status-badge-not-interested','Busy':'status-badge-busy','Low Potential':'status-badge-lowpotential','Interested':'status-badge-interested','Call Back':'status-badge-callback','Wrong Number':'status-badge-wrong-number','Voicemail':'status-badge-voicemail','Contacted':'status-badge-contacted','Proposal Sent':'status-badge-proposal','Customer':'status-badge-customer','Inactive':'status-badge-inactive'};return map[s]||'bg-light text-dark';}
@@ -1032,6 +1049,7 @@ function startCall(cid,ev,fromDialer){
   callStartTime=Date.now();
   if(fromDialer){
     document.getElementById('callingIndicator').classList.add('hidden');
+    setDialerBlur(true);   /* <-- stylish blur on the CRM while the dialer calls */
   }else{
     document.getElementById('callingIndicator').classList.remove('hidden');
     document.getElementById('callingName').innerText=c.name;
@@ -1156,7 +1174,19 @@ function processNextAdCall(){
   adWaiting=true;
   document.getElementById('autoDialerStatus').innerText=t('dlr.inprogress',{name:c.name});
 }
-window.stopAutoDialer=function(){adRunning=false;adWaiting=false;if(callTimer)clearTimeout(callTimer);document.getElementById('callingIndicator').classList.add('hidden');document.getElementById('currentCallInfo').classList.add('d-none');document.getElementById('nextCallBtn').classList.add('d-none');document.getElementById('dialerStatusButtons').classList.add('d-none');document.getElementById('dialerCommentBox').classList.add('d-none');document.getElementById('autoDialerStatus').innerText=t('dlr.stopped');updateAdButtons(false);toast(t('t.dialerstopped'),'danger');};
+window.stopAutoDialer=function(){
+  setDialerBlur(false);           /* <-- clear the blur when the dialer stops */
+  adRunning=false;adWaiting=false;
+  if(callTimer)clearTimeout(callTimer);
+  document.getElementById('callingIndicator').classList.add('hidden');
+  document.getElementById('currentCallInfo').classList.add('d-none');
+  document.getElementById('nextCallBtn').classList.add('d-none');
+  document.getElementById('dialerStatusButtons').classList.add('d-none');
+  document.getElementById('dialerCommentBox').classList.add('d-none');
+  document.getElementById('autoDialerStatus').innerText=t('dlr.stopped');
+  updateAdButtons(false);
+  toast(t('t.dialerstopped'),'danger');
+};
 function updateAdButtons(run){document.getElementById('startAutoDialerBtn').classList.toggle('d-none',run);document.getElementById('stopAutoDialerBtn').classList.toggle('d-none',!run);document.getElementById('autoDialerCount').disabled=run;document.getElementById('autoDialerInterval').disabled=run;document.getElementById('autoDialerStatusFilter').disabled=run;if(!run){document.getElementById('nextCallBtn').classList.add('d-none');document.getElementById('dialerStatusButtons').classList.add('d-none');document.getElementById('dialerCommentBox').classList.add('d-none');}}
 window.startAutoDialer=function(){if(adRunning)return;const cnt=parseInt(document.getElementById('autoDialerCount').value)||20;const sf=document.getElementById('autoDialerStatusFilter').value;const sts=sf?sf.split(','):[];const pool=customers.filter(c=>c.phone&&!c.archived&&(sts.length===0||sts.includes(c.status))).sort((a,b)=>(b.orderIndex||0)-(a.orderIndex||0));if(!pool.length){toast(t('t.nocontactsphone'),'danger');return;}adQueue=pool.slice(0,Math.min(cnt,pool.length));adIdx=0;adTotal=adQueue.length;adRunning=true;adWaiting=false;adCurrentId=null;document.getElementById('autoDialerProgressContainer').classList.remove('d-none');document.getElementById('autoDialerCounter').innerText=`0/${adTotal}`;document.getElementById('autoDialerProgressBar').style.width='0%';updateAdButtons(true);toast(t('t.dialerstart',{n:adTotal}));processNextAdCall();};
 window.openAutoDialerPanel=function(e){if(e)e.preventDefault();document.getElementById('autoDialerPanel').classList.add('show');};
